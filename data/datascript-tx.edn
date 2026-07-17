@@ -1,0 +1,25 @@
+;; data/datascript-tx.edn — DataScript tx-data derived from src/association/facts.cljc
+;; `association.facts/catalog` (ADR-2607141700 Wave 0). Same shape as sibling files.
+
+[#:association-rule{:id "sofofa.founding-1883-10-07"
+                     :title "Sociedad de Fomento Fabril (SOFOFA) founded 7 October 1883 (SOFOFA's own official history page, independently corroborated by Memoria Chilena -- the Chilean National Library's own archive -- and Wikidata Q6131011's inception statement)"
+                     :association "sofofa"
+                     :isic "9411"
+                     :country "CHL"
+                     :kind :governance-program
+                     :url "https://sff.sofofa.cl/nosotros/que-es-sofofa/historia/"
+                     :url-provenance :official-sofofa-cl
+                     :established-date "1883-10-07"
+                     :retrieved-at "2026-07-18"
+                     :topic [:governance]}
+ #:association-rule{:id "sofofa.code-of-ethics-1958"
+                     :title "SOFOFA issued its Code of Ethics ('Código de Ética') binding all members, in 1958 (SOFOFA's own official history page)"
+                     :association "sofofa"
+                     :isic "9411"
+                     :country "CHL"
+                     :kind :governance-program
+                     :url "https://sff.sofofa.cl/nosotros/que-es-sofofa/historia/"
+                     :url-provenance :official-sofofa-cl
+                     :established-date "1958"
+                     :retrieved-at "2026-07-18"
+                     :topic [:governance]}]
