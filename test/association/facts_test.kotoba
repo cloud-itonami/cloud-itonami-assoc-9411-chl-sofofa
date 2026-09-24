@@ -1,10 +1,11 @@
 (ns association.facts-test
-  (:require [clojure.test :refer [deftest is]]
-            [association.facts :as facts]))
+  (:require [clojure.test :refer [deftest is testing]]
+            [association.facts :as facts]
+            [clojure.string :as str]))
 
 (deftest sofofa-has-spec-basis
   (let [sb (facts/spec-basis "sofofa")]
-    (is (= 2 (count sb)))
+    (is (= 30 (count sb)))
     (is (every? #(= "9411" (:association-rule/isic %)) sb))
     (is (every? #(= "CHL" (:association-rule/country %)) sb))))
 
@@ -19,6 +20,82 @@
     (is (= ["ibec"] (:missing-associations c)))))
 
 (deftest by-topic-filters
-  (is (= 2 (count (facts/by-topic "sofofa" :governance))))
-  (is (empty? (facts/by-topic "sofofa" :labor)))
+  (is (= 21 (count (facts/by-topic "sofofa" :governance))))
+  (is (= 17 (count (facts/by-topic "sofofa" :statute))))
+  (is (= 7 (count (facts/by-topic "sofofa" :ethics))))
+  (is (= 4 (count (facts/by-topic "sofofa" :history))))
+  (is (= 4 (count (facts/by-topic "sofofa" :membership))))
+  (is (= 3 (count (facts/by-topic "sofofa" :constitution))))
+  (is (= 1 (count (facts/by-topic "sofofa" :labor))))
+  (is (= 1 (count (facts/by-topic "sofofa" :education))))
+  (is (= 1 (count (facts/by-topic "sofofa" :compliance))))
+  (is (= 1 (count (facts/by-topic "sofofa" :policy))))
+  (is (empty? (facts/by-topic "sofofa" :trade)))
   (is (empty? (facts/by-topic "ibec" :governance))))
+
+(deftest every-entry-is-individually-addressable
+  ;; A catalog that reused an id would let one entry shadow another under
+  ;; :db.unique/identity, and the count assertions above would not notice.
+  (let [sb (facts/spec-basis "sofofa")]
+    (is (= (count sb) (count (into #{} (map :association-rule/id sb)))))
+    (is (every? #(re-matches #"sofofa\.[a-z0-9-]+" (:association-rule/id %)) sb))))
+
+(deftest every-entry-carries-a-source-and-says-whose-it-is
+  ;; Both speakers are served from SOFOFA's site. The ministry certificate
+  ;; has its own label so a ministry statement is not filed as SOFOFA's own;
+  ;; the host must still be SOFOFA's.
+  (doseq [e (facts/spec-basis "sofofa")]
+    (testing (:association-rule/id e)
+      (is (re-matches #"https://\S+" (:association-rule/url e)))
+      (is (= ({:official-sofofa-cl "www.sofofa.cl"
+               :ministry-certificate-published-by-sofofa "www.sofofa.cl"}
+              (:association-rule/url-provenance e))
+             (second (re-find #"^https://([^/]+)/" (:association-rule/url e)))))
+      (is (seq (:association-rule/source-article e)))
+      (is (seq (:association-rule/source-quote e)))
+      (is (seq (:association-rule/topic e)))
+      (is (re-matches #"\d{4}-\d{2}-\d{2}" (:association-rule/retrieved-at e))))))
+
+(deftest no-entry-cites-the-dead-history-host
+  ;; sff.sofofa.cl answered HTTP 522 for the history page both July entries
+  ;; cited (measured 2026-09-24). An entry pointing there again cites a page
+  ;; nobody can read.
+  (doseq [e (facts/spec-basis "sofofa")]
+    (is (not (str/includes? (:association-rule/url e) "sff.sofofa.cl"))
+        (:association-rule/id e))))
+
+(deftest the-founding-is-dated-by-sofofa-itself
+  ;; The founding rests on SOFOFA's own Ethics Charter, whose closing line
+  ;; gives the day.
+  (let [[founding & more] (filter #(= "1883-10-07" (:association-rule/established-date %))
+                                  (facts/spec-basis "sofofa"))]
+    (is (nil? more))
+    (is (= :official-sofofa-cl (:association-rule/url-provenance founding)))
+    (is (= :day (:association-rule/date-precision founding)))
+    (is (str/includes? (:association-rule/source-quote founding)
+                       "7 de Octubre de 1883"))))
+
+(deftest a-dated-entry-quotes-its-date
+  ;; The year of every dated entry is in its own quote; an undated entry says
+  ;; why instead of silently carrying nothing.
+  (doseq [e (facts/spec-basis "sofofa")]
+    (testing (:association-rule/id e)
+      (if-let [d (or (:association-rule/established-date e)
+                     (:association-rule/last-revised-date e))]
+        (is (str/includes? (:association-rule/source-quote e) (subs d 0 4)))
+        (is (keyword? (:association-rule/date-unknown-because e)))))))
+
+(deftest no-office-holder-is-named
+  ;; The Mesa Directiva page names the current officers, the policy committee
+  ;; page names its members, the Liceos page names the corporation's manager,
+  ;; the registry certificate lists the board and its signatory, and the July
+  ;; history page named the President of the Republic at the founding. The
+  ;; quotes stop before each name; this pins that they still do.
+  (doseq [e (facts/spec-basis "sofofa")
+          nm ["Navarro" "Said" "Urzúa" "Urzua" "Yáñez" "Ortúzar" "Kusnir"
+              "Hasbun" "Concha" "Trusich" "Ananias" "Schmitt" "Ronsecco"
+              "Ugarte" "Montes" "Letelier" "Santa María"]]
+    (is (not (str/includes? (str (:association-rule/title e) " "
+                                 (:association-rule/source-quote e))
+                            nm))
+        (str (:association-rule/id e) " names " nm))))
